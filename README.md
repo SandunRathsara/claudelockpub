@@ -28,6 +28,26 @@ If you do not want to use the installer, the following manual steps apply to the
 
 Windows archives are published separately, but installation and command placement there are platform-specific and are not covered by these steps.
 
+## Uninstall
+
+Remove ClaudeLock from its default paths with:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SandunRathsara/claudelockpub/main/uninstall.sh | sh
+```
+
+Preview what would be removed from those paths without making changes:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SandunRathsara/claudelockpub/main/uninstall.sh | sh -s -- --dry-run
+```
+
+The uninstall script removes these exact paths if present. It does not search for or remove binaries that were manually copied to other locations:
+
+- `/usr/local/bin/claudelock`
+- `~/.config/claudelock.yaml`
+- timestamped backup files matching `~/.config/claudelock.yaml.*.bak` where `*` is a 14-digit timestamp
+
 ## Local config
 
 The installer writes:
