@@ -6,6 +6,9 @@ DEFAULT_SERVER_URL="https://claudelock.vps.digisglobal.com"
 CONFIG_DIR="${HOME}/.config"
 CONFIG_PATH="${CONFIG_DIR}/claudelock.yaml"
 INSTALL_PATH="/usr/local/bin/claudelock"
+CLAUDE_ALIAS_START="# claudelock managed start"
+CLAUDE_ALIAS_LINE='alias claude="claudelock run -- claude"'
+CLAUDE_ALIAS_END="# claudelock managed end"
 TTY_STATE=""
 TTY_RESTORE_NEEDED=0
 tmpdir=""
@@ -50,7 +53,7 @@ latest_release_json() {
 }
 
 can_use_tty() {
-  [ -r /dev/tty ] && [ -w /dev/tty ]
+  [ -r /dev/tty ] && [ -w /dev/tty ] && (: >/dev/tty) 2>/dev/null
 }
 
 prompt_value() {
@@ -130,6 +133,83 @@ try_bcrypt_hash() {
 
 yaml_quote() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+current_shell_name() {
+  shell_path=${SHELL-}
+  printf '%s\n' "${shell_path##*/}"
+}
+
+target_rc_path() {
+  case "$(current_shell_name)" in
+    zsh)
+      printf '%s\n' "$HOME/.zshrc"
+      ;;
+    bash)
+      printf '%s\n' "$HOME/.bashrc"
+      ;;
+    *)
+      printf '%s\n' ""
+      ;;
+  esac
+}
+
+has_managed_claude_alias() {
+  rc_path="$1"
+  awk -v start="$CLAUDE_ALIAS_START" -v line="$CLAUDE_ALIAS_LINE" -v ending="$CLAUDE_ALIAS_END" '
+    $0 == start {
+      if (getline next_line <= 0) {
+        next
+      }
+      if (next_line != line) {
+        next
+      }
+      if (getline end_line <= 0) {
+        next
+      }
+      if (end_line == ending) {
+        found = 1
+        exit 0
+      }
+    }
+    END {
+      exit(found ? 0 : 1)
+    }
+  ' "$rc_path"
+}
+
+append_managed_claude_alias() {
+  rc_path="$1"
+  {
+    printf '\n%s\n' "$CLAUDE_ALIAS_START"
+    printf '%s\n' "$CLAUDE_ALIAS_LINE"
+    printf '%s\n' "$CLAUDE_ALIAS_END"
+  } >>"$rc_path"
+}
+
+configure_claude_alias() {
+  rc_path=$(target_rc_path)
+  if [ -z "$rc_path" ]; then
+    printf 'alias_status: skipped (unsupported shell: %s)\n' "$(current_shell_name)"
+    return 0
+  fi
+
+  if [ -f "$rc_path" ]; then
+    :
+  else
+    : >"$rc_path"
+  fi
+
+  if has_managed_claude_alias "$rc_path"; then
+    printf 'alias_status: unchanged (%s already contains ClaudeLock managed alias)\n' "$rc_path"
+  elif grep -Eq '^[[:space:]]*alias[[:space:]]+claude=' "$rc_path"; then
+    printf 'alias_status: warning (%s already defines claude; left unchanged)\n' "$rc_path"
+  else
+    append_managed_claude_alias "$rc_path"
+    printf 'alias_status: added (%s)\n' "$rc_path"
+  fi
+
+  printf 'shell_reload: open a new shell or source %s\n' "$rc_path"
 }
 
 install_binary() {
@@ -237,8 +317,6 @@ if [ -z "$password" ]; then
   exit 1
 fi
 
-install_binary "$binary_path"
-
 mkdir -p "$CONFIG_DIR"
 backup_path=""
 if [ -f "$CONFIG_PATH" ]; then
@@ -259,6 +337,9 @@ if password_hash=$(try_bcrypt_hash "$password"); then
 else
   password_hash=""
 fi
+
+install_binary "$binary_path"
+configure_claude_alias
 
 printf '\nClaudeLock installation complete.\n'
 printf 'installed_version: %s\n' "$version"

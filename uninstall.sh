@@ -3,6 +3,9 @@ set -eu
 
 INSTALL_PATH="/usr/local/bin/claudelock"
 CONFIG_PATH="${HOME}/.config/claudelock.yaml"
+CLAUDE_ALIAS_START="# claudelock managed start"
+CLAUDE_ALIAS_LINE='alias claude="claudelock run -- claude"'
+CLAUDE_ALIAS_END="# claudelock managed end"
 DRY_RUN=0
 
 usage() {
@@ -97,6 +100,97 @@ remove_backups() {
   fi
 }
 
+resolve_rc_update_path() {
+  rc_path="$1"
+
+  if [ -L "$rc_path" ] && command -v readlink >/dev/null 2>&1; then
+    link_target=$(readlink "$rc_path")
+    case "$link_target" in
+      /*)
+        printf '%s\n' "$link_target"
+        ;;
+      *)
+        printf '%s\n' "$(dirname "$rc_path")/$link_target"
+        ;;
+    esac
+    return 0
+  fi
+
+  printf '%s\n' "$rc_path"
+}
+
+remove_managed_alias_from_rc() {
+  label="$1"
+  rc_path="$2"
+
+  if ! path_exists "$rc_path"; then
+    log "${label}: already absent"
+    return 0
+  fi
+
+  update_path=$(resolve_rc_update_path "$rc_path")
+  if ! awk -v start="$CLAUDE_ALIAS_START" -v line="$CLAUDE_ALIAS_LINE" -v ending="$CLAUDE_ALIAS_END" '
+    $0 == start {
+      if (getline next_line <= 0) {
+        exit 1
+      }
+      if (next_line != line) {
+        next
+      }
+      if (getline end_line <= 0) {
+        exit 1
+      }
+      if (end_line == ending) {
+        found = 1
+        exit 0
+      }
+    }
+    END {
+      exit(found ? 0 : 1)
+    }
+  ' "$update_path" >/dev/null; then
+    log "${label}: no ClaudeLock managed alias"
+    return 0
+  fi
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "${label}: would remove managed alias from ${rc_path}"
+    return 0
+  fi
+
+  update_dir=$(dirname "$update_path")
+  tmp_path=$(mktemp "${update_dir}/claudelock-uninstall.XXXXXX")
+  awk -v start="$CLAUDE_ALIAS_START" -v line="$CLAUDE_ALIAS_LINE" -v ending="$CLAUDE_ALIAS_END" '
+    skip == 0 && $0 == start {
+      if (getline next_line <= 0) {
+        print $0
+        exit
+      }
+      if (next_line != line) {
+        print $0
+        print next_line
+        next
+      }
+      if (getline end_line <= 0) {
+        print $0
+        print next_line
+        exit
+      }
+      if (end_line == ending) {
+        skip = 0
+        next
+      }
+      print $0
+      print next_line
+      print end_line
+      next
+    }
+    { print }
+  ' "$update_path" >"$tmp_path"
+  mv "$tmp_path" "$update_path"
+  log "${label}: removed managed alias from ${rc_path}"
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --dry-run)
@@ -119,3 +213,5 @@ fi
 remove_binary
 remove_file 'config' "$CONFIG_PATH"
 remove_backups
+remove_managed_alias_from_rc 'zshrc' "$HOME/.zshrc"
+remove_managed_alias_from_rc 'bashrc' "$HOME/.bashrc"

@@ -8,14 +8,36 @@ curl -fsSL https://raw.githubusercontent.com/SandunRathsara/claudelockpub/main/i
 
 The installer currently supports macOS arm64 and Linux amd64, including WSL on amd64. It installs `claudelock` to `/usr/local/bin`, so you may be prompted for elevated privileges depending on your platform and permissions.
 
+When the installer finds a supported rc file for your active shell and no existing `alias claude=...` blocks it, it also adds a ClaudeLock-managed alias so `claude` runs `claudelock run -- claude`.
+
 ## What the installer does
 
 - Detects your platform and downloads the latest ClaudeLock CLI release
 - Installs `claudelock` to `/usr/local/bin`
 - Prompts for your username, password, and server URL
 - Writes `~/.config/claudelock.yaml`
+- Adds a ClaudeLock-managed `claude` alias in `~/.zshrc` or `~/.bashrc` when a supported rc file is available and no existing `alias claude=...` blocks it
 - Prints a bcrypt hash for sharing with Sandun when a local hashing tool is available
 - Otherwise prints instructions for generating the bcrypt hash online with a trusted tool. Do not enter your real password into an untrusted third-party site.
+
+## After install
+
+When the managed alias is configured, open a new shell or reload your rc file, then use:
+
+```bash
+claude
+```
+
+ClaudeLock will prompt for the task name, acquire the lock if available, then launch Claude.
+
+You can still run ClaudeLock explicitly when needed:
+
+```bash
+claudelock run --task "Investigate flaky tests" -- claude
+claudelock lock --task "Manual testing"
+```
+
+If a ClaudeLock-managed alias already exists in the target rc file, the installer leaves it unchanged and tells you. If your rc file already defines `alias claude=...`, the installer warns and leaves your existing alias untouched.
 
 ## Manual download
 
@@ -47,6 +69,8 @@ The uninstall script removes these exact paths if present. It does not search fo
 - `/usr/local/bin/claudelock`
 - `~/.config/claudelock.yaml`
 - timestamped backup files matching `~/.config/claudelock.yaml.*.bak` where `*` is a 14-digit timestamp
+
+It also removes the ClaudeLock-managed alias block from `~/.zshrc` or `~/.bashrc` when present. It does not remove a user-defined `alias claude=...`.
 
 ## Local config
 
