@@ -9,6 +9,10 @@ import (
 
 func TestUninstallRemovesManagedAliasBlock(t *testing.T) {
 	homeDir := t.TempDir()
+	installPath := filepath.Join(t.TempDir(), "claudelock")
+	if err := os.WriteFile(installPath, []byte("binary"), 0755); err != nil {
+		t.Fatalf("write binary: %v", err)
+	}
 	rcPath := filepath.Join(homeDir, ".zshrc")
 	content := strings.Join([]string{
 		"alias ll='ls -l'",
@@ -21,9 +25,13 @@ func TestUninstallRemovesManagedAliasBlock(t *testing.T) {
 		t.Fatalf("write zshrc: %v", err)
 	}
 
-	output, err := runScript(t, scriptPath(t, "uninstall.sh"), []string{"HOME=" + homeDir}, "")
+	output, err := runScript(t, scriptPath(t, "uninstall.sh"), []string{"HOME=" + homeDir, "INSTALL_PATH=" + installPath}, "")
 	if err != nil {
 		t.Fatalf("uninstall.sh failed: %v\n%s", err, output)
+	}
+
+	if _, err := os.Stat(installPath); !os.IsNotExist(err) {
+		t.Fatalf("expected install path removed, stat err=%v", err)
 	}
 
 	rcData, err := os.ReadFile(rcPath)

@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-INSTALL_PATH="/usr/local/bin/claudelock"
-CONFIG_PATH="${HOME}/.config/claudelock.yaml"
+INSTALL_PATH="${INSTALL_PATH:-/usr/local/bin/claudelock}"
+CONFIG_PATH="${CONFIG_PATH:-${HOME}/.config/claudelock.yaml}"
 CLAUDE_ALIAS_START="# claudelock managed start"
 CLAUDE_ALIAS_LINE='alias claude="claudelock run -- claude"'
 CLAUDE_ALIAS_END="# claudelock managed end"
