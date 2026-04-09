@@ -5,13 +5,14 @@ REPO="SandunRathsara/claudelockpub"
 DEFAULT_SERVER_URL="https://claudelock.vps.digisglobal.com"
 CONFIG_DIR="${HOME}/.config"
 CONFIG_PATH="${CONFIG_DIR}/claudelock.yaml"
-INSTALL_PATH="/usr/local/bin/claudelock"
+INSTALL_PATH="${INSTALL_PATH:-/usr/local/bin/claudelock}"
 CLAUDE_ALIAS_START="# claudelock managed start"
 CLAUDE_ALIAS_LINE='alias claude="claudelock run -- claude"'
 CLAUDE_ALIAS_END="# claudelock managed end"
 TTY_STATE=""
 TTY_RESTORE_NEEDED=0
 tmpdir=""
+is_update=0
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -303,63 +304,81 @@ if [ -z "$binary_path" ]; then
   exit 1
 fi
 
-username=$(prompt_value "Username")
-password=$(prompt_password)
-server_url=$(prompt_value "Server URL" "$DEFAULT_SERVER_URL")
-
-if [ -z "$username" ]; then
-  printf 'error: username is required\n' >&2
-  exit 1
-fi
-
-if [ -z "$password" ]; then
-  printf 'error: password is required\n' >&2
-  exit 1
-fi
-
-mkdir -p "$CONFIG_DIR"
 backup_path=""
-if [ -f "$CONFIG_PATH" ]; then
-  timestamp=$(date +%Y%m%d%H%M%S)
-  backup_path="${CONFIG_PATH}.${timestamp}.bak"
-  mv "$CONFIG_PATH" "$backup_path"
+username=""
+password=""
+server_url=""
+password_hash=""
+
+if [ -f "$INSTALL_PATH" ] && [ -f "$CONFIG_PATH" ]; then
+  is_update=1
 fi
 
-cat >"$CONFIG_PATH" <<EOF
+if [ "$is_update" -eq 0 ]; then
+  username=$(prompt_value "Username")
+  password=$(prompt_password)
+  server_url=$(prompt_value "Server URL" "$DEFAULT_SERVER_URL")
+
+  if [ -z "$username" ]; then
+    printf 'error: username is required\n' >&2
+    exit 1
+  fi
+
+  if [ -z "$password" ]; then
+    printf 'error: password is required\n' >&2
+    exit 1
+  fi
+
+  mkdir -p "$CONFIG_DIR"
+  if [ -f "$CONFIG_PATH" ]; then
+    timestamp=$(date +%Y%m%d%H%M%S)
+    backup_path="${CONFIG_PATH}.${timestamp}.bak"
+    mv "$CONFIG_PATH" "$backup_path"
+  fi
+
+  cat >"$CONFIG_PATH" <<EOF
 server_url: "$(yaml_quote "$server_url")"
 username: "$(yaml_quote "$username")"
 password: "$(yaml_quote "$password")"
 EOF
 
-password_hash=""
-if password_hash=$(try_bcrypt_hash "$password"); then
-  :
-else
-  password_hash=""
+  if password_hash=$(try_bcrypt_hash "$password"); then
+    :
+  else
+    password_hash=""
+  fi
 fi
 
 install_binary "$binary_path"
-configure_claude_alias
-
-printf '\nClaudeLock installation complete.\n'
-printf 'installed_version: %s\n' "$version"
-printf 'installed_path: %s\n' "$INSTALL_PATH"
-printf 'config_path: %s\n' "$CONFIG_PATH"
-if [ -n "$backup_path" ]; then
-  printf 'backup_path: %s\n' "$backup_path"
+if [ "$is_update" -eq 1 ]; then
+  printf '\nClaudeLock update complete.\n'
+  printf 'installed_version: %s\n' "$version"
+  printf 'installed_path: %s\n' "$INSTALL_PATH"
+  printf 'update_status: existing config preserved\n'
+  printf 'alias_status: unchanged (existing shell setup preserved)\n'
 else
-  printf 'backup_path: none\n'
-fi
-printf 'username: %s\n' "$username"
+  configure_claude_alias
 
-if [ -n "$password_hash" ]; then
-  printf 'password_hash: %s\n' "$password_hash"
-  printf '\nShare these with Sandun:\n'
+  printf '\nClaudeLock installation complete.\n'
+  printf 'installed_version: %s\n' "$version"
+  printf 'installed_path: %s\n' "$INSTALL_PATH"
+  printf 'config_path: %s\n' "$CONFIG_PATH"
+  if [ -n "$backup_path" ]; then
+    printf 'backup_path: %s\n' "$backup_path"
+  else
+    printf 'backup_path: none\n'
+  fi
   printf 'username: %s\n' "$username"
-  printf 'password_hash: %s\n' "$password_hash"
-else
-  printf '\nNo local bcrypt tool was found.\n'
-  printf 'Generate a bcrypt hash for your chosen password using a trusted online tool, then send Sandun:\n'
-  printf 'username: %s\n' "$username"
-  printf 'password_hash: <generated bcrypt hash>\n'
+
+  if [ -n "$password_hash" ]; then
+    printf 'password_hash: %s\n' "$password_hash"
+    printf '\nShare these with Sandun:\n'
+    printf 'username: %s\n' "$username"
+    printf 'password_hash: %s\n' "$password_hash"
+  else
+    printf '\nNo local bcrypt tool was found.\n'
+    printf 'Generate a bcrypt hash for your chosen password using a trusted online tool, then send Sandun:\n'
+    printf 'username: %s\n' "$username"
+    printf 'password_hash: <generated bcrypt hash>\n'
+  fi
 fi
