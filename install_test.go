@@ -73,18 +73,40 @@ printf '#!/bin/sh\nexit 0\n' >"$path"
 chmod +x "$path"
 `)
 	writeExecutable(t, filepath.Join(binDir, "install"), `#!/bin/sh
-last=''
-for arg in "$@"; do
-  last="$arg"
-done
-case "$1" in
-  -d)
-    mkdir -p "$last"
-    exit 0
-    ;;
-esac
-exit 0
-`)
+	last=''
+	for arg in "$@"; do
+	  last="$arg"
+	done
+	case "$1" in
+	  -d)
+	    mkdir -p "$last"
+	    exit 0
+	    ;;
+	esac
+	src=''
+	dest=''
+	while [ "$#" -gt 0 ]; do
+	  case "$1" in
+	    -m)
+	      shift 2
+	      ;;
+	    -*)
+	      shift
+	      ;;
+	    *)
+	      if [ -z "$src" ]; then
+	        src="$1"
+	      elif [ -z "$dest" ]; then
+	        dest="$1"
+	      fi
+	      shift
+	      ;;
+	  esac
+	done
+	cp "$src" "$dest"
+	chmod +x "$dest"
+	exit 0
+	`)
 	writeExecutable(t, filepath.Join(binDir, "sudo"), `#!/bin/sh
 exec "$@"
 `)
@@ -105,9 +127,10 @@ func runScript(t *testing.T, path string, env []string, stdin string) (string, e
 func TestInstallAddsManagedAliasForZsh(t *testing.T) {
 	_, toolEnv := fakeToolEnv(t)
 	homeDir := t.TempDir()
+	installPath := filepath.Join(t.TempDir(), "claudelock")
 	rcPath := filepath.Join(homeDir, ".zshrc")
 
-	output, err := runScript(t, scriptPath(t, "install.sh"), append(toolEnv, "HOME="+homeDir, "SHELL=/bin/zsh"), "alice\nsecret\n\n")
+	output, err := runScript(t, scriptPath(t, "install.sh"), append(toolEnv, "HOME="+homeDir, "SHELL=/bin/zsh", "INSTALL_PATH="+installPath), "alice\nsecret\n\n")
 	if err != nil {
 		t.Fatalf("install.sh failed: %v\n%s", err, output)
 	}
@@ -125,5 +148,109 @@ func TestInstallAddsManagedAliasForZsh(t *testing.T) {
 	}
 	if !strings.Contains(output, "shell_reload:") {
 		t.Fatalf("expected shell reload reminder, got:\n%s", output)
+	}
+}
+
+func TestInstallUpdatesExistingBinaryWithoutRewritingConfig(t *testing.T) {
+	_, toolEnv := fakeToolEnv(t)
+	homeDir := t.TempDir()
+	installDir := t.TempDir()
+	installPath := filepath.Join(installDir, "claudelock")
+	configPath := filepath.Join(homeDir, ".config", "claudelock.yaml")
+	originalBinary := "#!/bin/sh\necho original-binary\n"
+	configContent := "server_url: https://example.com\nusername: alice\npassword: secret\n"
+
+	writeExecutable(t, installPath, originalBinary)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+		t.Fatalf("create config dir: %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	output, err := runScript(
+		t,
+		scriptPath(t, "install.sh"),
+		append(toolEnv, "HOME="+homeDir, "SHELL=/bin/zsh", "INSTALL_PATH="+installPath),
+		"",
+	)
+	if err != nil {
+		t.Fatalf("install.sh failed: %v\n%s", err, output)
+	}
+
+	updatedConfig, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if string(updatedConfig) != configContent {
+		t.Fatalf("expected config to remain unchanged, got:\n%s", string(updatedConfig))
+	}
+	backupPaths, err := filepath.Glob(configPath + ".*.bak")
+	if err != nil {
+		t.Fatalf("glob config backups: %v", err)
+	}
+	if len(backupPaths) != 0 {
+		t.Fatalf("expected update mode to avoid config backups, got: %v", backupPaths)
+	}
+	updatedBinary, err := os.ReadFile(installPath)
+	if err != nil {
+		t.Fatalf("read installed binary: %v", err)
+	}
+	if string(updatedBinary) == originalBinary {
+		t.Fatalf("expected update mode to replace the existing installed binary")
+	}
+	if strings.Contains(output, "Username:") {
+		t.Fatalf("expected update mode to skip username prompt, got:\n%s", output)
+	}
+	if strings.Contains(output, "Password:") {
+		t.Fatalf("expected update mode to skip password prompt, got:\n%s", output)
+	}
+	if !strings.Contains(output, "update_status:") {
+		t.Fatalf("expected update status in output, got:\n%s", output)
+	}
+	if strings.Contains(output, "config_path:") {
+		t.Fatalf("expected update mode to omit config path, got:\n%s", output)
+	}
+}
+
+func TestInstallTreatsExistingBinaryWithoutConfigAsFreshInstall(t *testing.T) {
+	_, toolEnv := fakeToolEnv(t)
+	homeDir := t.TempDir()
+	installDir := t.TempDir()
+	installPath := filepath.Join(installDir, "claudelock")
+	configPath := filepath.Join(homeDir, ".config", "claudelock.yaml")
+	originalBinary := "#!/bin/sh\necho original-binary\n"
+
+	writeExecutable(t, installPath, originalBinary)
+
+	output, err := runScript(
+		t,
+		scriptPath(t, "install.sh"),
+		append(toolEnv, "HOME="+homeDir, "SHELL=/bin/zsh", "INSTALL_PATH="+installPath),
+		"alice\nsecret\n\n",
+	)
+	if err != nil {
+		t.Fatalf("install.sh failed: %v\n%s", err, output)
+	}
+
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	configContent := string(configData)
+	if !strings.Contains(configContent, "username: \"alice\"") {
+		t.Fatalf("expected config to contain username, got:\n%s", configContent)
+	}
+	if !strings.Contains(configContent, "password: \"secret\"") {
+		t.Fatalf("expected config to contain password, got:\n%s", configContent)
+	}
+	if !strings.Contains(configContent, "server_url: \"https://claudelock.vps.digisglobal.com\"") {
+		t.Fatalf("expected config to contain default server URL, got:\n%s", configContent)
+	}
+	if strings.Contains(output, "update_status:") {
+		t.Fatalf("expected fresh-install output without update status, got:\n%s", output)
+	}
+	if !strings.Contains(output, "config_path:") {
+		t.Fatalf("expected fresh-install output with config path, got:\n%s", output)
 	}
 }
