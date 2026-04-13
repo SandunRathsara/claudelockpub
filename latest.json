@@ -1,25 +1,25 @@
 {
-  "version": "v1.4.0",
-  "published_at": "2026-04-10T14:43:28+05:30",
+  "version": "v1.5.0",
+  "published_at": "2026-04-13T12:40:43+05:30",
   "repository": "SandunRathsara/claudelockpub",
   "assets": [
     {
-      "name": "claudelock-cli-v1.4.0-darwin-arm64.tar.gz",
+      "name": "claudelock-cli-v1.5.0-darwin-arm64.tar.gz",
       "platform": "darwin-arm64",
-      "url": "https://github.com/SandunRathsara/claudelockpub/releases/download/v1.4.0/claudelock-cli-v1.4.0-darwin-arm64.tar.gz",
-      "checksum": "27a7fba62f2c457f17b93cbc2dee30cd0d15cb6fbb736e8bfdbb85430f94d696"
+      "url": "https://github.com/SandunRathsara/claudelockpub/releases/download/v1.5.0/claudelock-cli-v1.5.0-darwin-arm64.tar.gz",
+      "checksum": "a4f1d818a253a1722288eaf50fc6c5ac1350f7b15afaa53f197063c2a8d8cc03"
     },
     {
-      "name": "claudelock-cli-v1.4.0-linux-amd64.tar.gz",
+      "name": "claudelock-cli-v1.5.0-linux-amd64.tar.gz",
       "platform": "linux-amd64",
-      "url": "https://github.com/SandunRathsara/claudelockpub/releases/download/v1.4.0/claudelock-cli-v1.4.0-linux-amd64.tar.gz",
-      "checksum": "146a0361f8410b30ba9645542d5a018b1e2fd4400f039ba7d51edd4bb5777125"
+      "url": "https://github.com/SandunRathsara/claudelockpub/releases/download/v1.5.0/claudelock-cli-v1.5.0-linux-amd64.tar.gz",
+      "checksum": "821817d749206664d62a7324e0adb3f6c99abc23708dd1a560e4dc716e790ef7"
     },
     {
-      "name": "claudelock-cli-v1.4.0-windows-amd64.zip",
+      "name": "claudelock-cli-v1.5.0-windows-amd64.zip",
       "platform": "windows-amd64",
-      "url": "https://github.com/SandunRathsara/claudelockpub/releases/download/v1.4.0/claudelock-cli-v1.4.0-windows-amd64.zip",
-      "checksum": "cd2a28614dcfe454403abed57e1316919110a0cc830ce31d9746795f856b7781"
+      "url": "https://github.com/SandunRathsara/claudelockpub/releases/download/v1.5.0/claudelock-cli-v1.5.0-windows-amd64.zip",
+      "checksum": "3abfa5548ab5534e7e5cf8e3ff22b5cc5bb4aa49fb6de7db022cd43400b475ef"
     }
   ]
 }
